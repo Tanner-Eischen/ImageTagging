@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { DetectionViewer } from '@/components/detection-viewer'
@@ -27,75 +27,21 @@ interface AnalysisReport {
   image: string
 }
 
-const mockReports: AnalysisReport[] = [
-  {
-    id: 'rpt-1',
-    photoId: '1',
-    photoTitle: 'Roof Damage - Property A',
-    analyzed: '2024-11-14',
-    status: 'completed',
-    overallRisk: 'high',
-    detections: [
-      {
-        id: 'det-1',
-        type: 'Roof Shingle Damage',
-        confidence: 0.94,
-        location: 'Upper left section',
-        severity: 'high',
-        description: 'Multiple missing and damaged roof shingles detected',
-      },
-      {
-        id: 'det-2',
-        type: 'Water Staining',
-        confidence: 0.87,
-        location: 'Center area',
-        severity: 'medium',
-        description: 'Water stains indicating potential water infiltration',
-      },
-      {
-        id: 'det-3',
-        type: 'Flashing Issues',
-        confidence: 0.79,
-        location: 'Chimney area',
-        severity: 'medium',
-        description: 'Deteriorated flashing around chimney penetration',
-      },
-    ],
-    image: '/damaged-roof.png'
-  },
-  {
-    id: 'rpt-2',
-    photoId: '2',
-    photoTitle: 'Foundation Crack - Property B',
-    analyzed: '2024-11-13',
-    status: 'completed',
-    overallRisk: 'critical',
-    detections: [
-      {
-        id: 'det-4',
-        type: 'Structural Crack',
-        confidence: 0.96,
-        location: 'Lower foundation wall',
-        severity: 'critical',
-        description: 'Large vertical crack indicating structural settlement',
-      },
-      {
-        id: 'det-5',
-        type: 'Efflorescence',
-        confidence: 0.84,
-        location: 'Crack edges',
-        severity: 'medium',
-        description: 'White mineral deposits indicating moisture seepage',
-      },
-    ],
-    image: '/foundation-crack.png'
-  },
-]
-
 export default function AnalysisPage() {
-  const [selectedReport, setSelectedReport] = useState<AnalysisReport>(mockReports[0])
+  const [reports, setReports] = useState<AnalysisReport[]>([])
+  const [selectedReport, setSelectedReport] = useState<AnalysisReport | null>(null)
 
-  const severityCount = selectedReport.detections.reduce((acc, det) => {
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const { reports } = await (await import('@/lib/api')).listReports()
+        setReports(reports)
+        setSelectedReport(reports[0] ?? null)
+      } catch {}
+    })()
+  }, [])
+
+  const severityCount = (selectedReport?.detections || []).reduce((acc, det) => {
     acc[det.severity] = (acc[det.severity] || 0) + 1
     return acc
   }, {} as Record<string, number>)
@@ -115,12 +61,12 @@ export default function AnalysisPage() {
         <div className="lg:col-span-1 space-y-2">
           <p className="text-sm font-medium px-1">Recent Reports</p>
           <div className="space-y-2">
-            {mockReports.map((report) => (
+            {reports.map((report) => (
               <button
                 key={report.id}
                 onClick={() => setSelectedReport(report)}
                 className={`w-full text-left p-3 rounded-lg border transition-all ${
-                  selectedReport.id === report.id
+                  selectedReport?.id === report.id
                     ? 'border-primary bg-primary/10'
                     : 'border-border/50 hover:border-primary/50'
                 }`}
@@ -149,11 +95,15 @@ export default function AnalysisPage() {
 
         {/* Main viewer */}
         <div className="lg:col-span-3">
-          <DetectionViewer
-            imageUrl={selectedReport.image}
-            detections={selectedReport.detections}
-            title={selectedReport.photoTitle}
-          />
+          {selectedReport ? (
+            <DetectionViewer
+              imageUrl={selectedReport.image}
+              detections={selectedReport.detections}
+              title={selectedReport.photoTitle}
+            />
+          ) : (
+            <div className="p-6 border border-border/50 rounded-lg">No reports available</div>
+          )}
         </div>
       </div>
 
@@ -164,7 +114,7 @@ export default function AnalysisPage() {
             <div>
               <CardTitle>Analysis Summary</CardTitle>
               <CardDescription>
-                {selectedReport.photoTitle}
+                {selectedReport?.photoTitle || 'No selection'}
               </CardDescription>
             </div>
             <div className="flex gap-2">
@@ -187,6 +137,7 @@ export default function AnalysisPage() {
           <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
             <div className="p-4 bg-secondary rounded-lg">
               <p className="text-xs text-muted-foreground">Overall Risk</p>
+              {selectedReport && (
               <Badge
                 className={`mt-2 ${
                   selectedReport.overallRisk === 'critical'
@@ -200,10 +151,11 @@ export default function AnalysisPage() {
               >
                 {selectedReport.overallRisk}
               </Badge>
+              )}
             </div>
             <div className="p-4 bg-secondary rounded-lg">
               <p className="text-xs text-muted-foreground">Total Detections</p>
-              <p className="text-2xl font-bold mt-2">{selectedReport.detections.length}</p>
+              <p className="text-2xl font-bold mt-2">{selectedReport?.detections.length || 0}</p>
             </div>
             {Object.entries(severityCount).map(([severity, count]) => (
               <div key={severity} className="p-4 bg-secondary rounded-lg">
@@ -217,7 +169,7 @@ export default function AnalysisPage() {
           <div className="mt-6 pt-6 border-t border-border/50">
             <h3 className="font-semibold mb-4">Detailed Findings</h3>
             <div className="space-y-3">
-              {selectedReport.detections.map((detection) => (
+              {(selectedReport?.detections || []).map((detection) => (
                 <div key={detection.id} className="p-4 border border-border/50 rounded-lg">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">

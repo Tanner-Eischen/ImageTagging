@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Upload, ImageIcon } from 'lucide-react'
@@ -8,7 +8,7 @@ import { PhotoUploadDialog } from '@/components/photo-upload-dialog'
 import { PhotoFilters } from '@/components/photo-filters'
 
 interface Photo {
-  id: number
+  id: string
   title: string
   date: string
   status: 'analyzed' | 'analyzing' | 'pending'
@@ -17,42 +17,32 @@ interface Photo {
 
 export default function GalleryPage() {
   const [uploadOpen, setUploadOpen] = useState(false)
-  const [photos, setPhotos] = useState<Photo[]>([
-    {
-      id: 1,
-      title: 'Roof Damage - Property A',
-      date: '2024-11-14',
-      status: 'analyzed',
-      image: '/roof-damage-construction.jpg'
-    },
-    {
-      id: 2,
-      title: 'Foundation Crack - Property B',
-      date: '2024-11-13',
-      status: 'pending',
-      image: '/foundation-crack.png'
-    },
-    {
-      id: 3,
-      title: 'Water Damage - Property C',
-      date: '2024-11-12',
-      status: 'analyzing',
-      image: '/water-damage-construction.jpg'
-    },
-  ])
+  const [photos, setPhotos] = useState<Photo[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [sortBy, setSortBy] = useState('newest')
 
-  const handleUpload = (files: File[]) => {
-    const newPhotos: Photo[] = files.map((file, index) => ({
-      id: Math.max(...photos.map(p => p.id), 0) + index + 1,
-      title: file.name.replace(/\.[^/.]+$/, ''),
-      date: new Date().toISOString().split('T')[0],
-      status: 'pending',
-      image: URL.createObjectURL(file),
-    }))
-    setPhotos([...newPhotos, ...photos])
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const { photos } = await (await import('@/lib/api')).listPhotos()
+        setPhotos(photos)
+      } catch {}
+    })()
+  }, [])
+
+  const handleUpload = async (files: File[]) => {
+    try {
+      const api = await import('@/lib/api')
+      const { photos: created } = await api.uploadPhotos(files)
+      setPhotos(prev => [...created, ...prev])
+      for (const p of created) {
+        api.analyzePhoto(p.id).then(async () => {
+          const { photos } = await api.listPhotos()
+          setPhotos(photos)
+        }).catch(() => {})
+      }
+    } catch {}
   }
 
   const filteredPhotos = photos

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { X, CheckCircle, AlertCircle, Info, Clock } from 'lucide-react'
+import { X, CheckCircle, AlertCircle, Info, Clock, Bell } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
