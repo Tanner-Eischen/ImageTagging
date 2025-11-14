@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
@@ -12,6 +12,7 @@ interface Detection {
   location: string
   severity: 'critical' | 'high' | 'medium' | 'low'
   description: string
+  box?: { left: number; top: number; width: number; height: number }
 }
 
 interface DetectionViewerProps {
@@ -26,6 +27,9 @@ export function DetectionViewer({
   title,
 }: DetectionViewerProps) {
   const [selectedDetection, setSelectedDetection] = useState<Detection | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const imgRef = useRef<HTMLImageElement>(null)
+  const [dims, setDims] = useState({ contW: 0, contH: 0, natW: 0, natH: 0 })
 
   const severityColors = {
     critical: '#dc2626',
@@ -46,6 +50,45 @@ export function DetectionViewer({
     confidence: Math.round(d.confidence * 100),
   }))
 
+  useEffect(() => {
+    const measure = () => {
+      const c = containerRef.current
+      if (!c) return
+      const rect = c.getBoundingClientRect()
+      setDims(prev => ({ ...prev, contW: rect.width, contH: rect.height }))
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [])
+
+  const onImgLoad = () => {
+    const img = imgRef.current
+    if (!img) return
+    setDims(prev => ({ ...prev, natW: img.naturalWidth, natH: img.naturalHeight }))
+  }
+
+  const boxStyle = (d: Detection) => {
+    if (!d.box || dims.contW === 0 || dims.contH === 0 || dims.natW === 0 || dims.natH === 0) {
+      return {
+        left: `${Math.random() * 60 + 10}%`,
+        top: `${Math.random() * 60 + 10}%`,
+        width: '15%',
+        height: '15%',
+      }
+    }
+    const scale = Math.min(dims.contW / dims.natW, dims.contH / dims.natH)
+    const dispW = dims.natW * scale
+    const dispH = dims.natH * scale
+    const offsetX = (dims.contW - dispW) / 2
+    const offsetY = (dims.contH - dispH) / 2
+    const left = offsetX + d.box.left * dispW
+    const top = offsetY + d.box.top * dispH
+    const width = d.box.width * dispW
+    const height = d.box.height * dispH
+    return { left, top, width, height }
+  }
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Image with overlays */}
@@ -58,11 +101,13 @@ export function DetectionViewer({
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="relative bg-secondary aspect-video overflow-auto">
+            <div ref={containerRef} className="relative bg-secondary aspect-video overflow-auto">
               <img
+                ref={imgRef}
                 src={imageUrl || "/placeholder.svg"}
                 alt={title}
                 className="w-full h-full object-contain"
+                onLoad={onImgLoad}
               />
               {/* Detection boxes overlay */}
               <div className="absolute inset-0 pointer-events-none">
@@ -71,10 +116,7 @@ export function DetectionViewer({
                     key={detection.id}
                     className="absolute border-2 opacity-75"
                     style={{
-                      left: `${Math.random() * 60 + 10}%`,
-                      top: `${Math.random() * 60 + 10}%`,
-                      width: '15%',
-                      height: '15%',
+                      ...boxStyle(detection),
                       borderColor: severityColors[detection.severity],
                       cursor: 'pointer',
                     }}

@@ -3,6 +3,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { randomUUID } from 'crypto'
 import { addPhoto, readPhotos, Photo } from '@/lib/store'
+import { put } from '@vercel/blob'
 
 export const runtime = 'nodejs'
 
@@ -24,23 +25,32 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No image files provided' }, { status: 400 })
   }
 
+  const token = process.env.BLOB_READ_WRITE_TOKEN
   const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
-  await fs.mkdir(uploadsDir, { recursive: true })
+  if (!token) {
+    await fs.mkdir(uploadsDir, { recursive: true })
+  }
 
   const created: Photo[] = []
   for (const file of files) {
     const id = randomUUID()
     const ext = (file.name.split('.').pop() || 'png').toLowerCase()
     const safeName = `${id}.${ext}`
-    const destPath = path.join(uploadsDir, safeName)
     const buf = Buffer.from(await file.arrayBuffer())
-    await fs.writeFile(destPath, buf)
+    let imageUrl = `/uploads/${safeName}`
+    if (token) {
+      const res = await put(`uploads/${safeName}`, buf, { access: 'public', contentType: file.type || 'image/jpeg', token })
+      imageUrl = res.url
+    } else {
+      const destPath = path.join(uploadsDir, safeName)
+      await fs.writeFile(destPath, buf)
+    }
     const photo: Photo = {
       id,
       title: file.name.replace(/\.[^/.]+$/, ''),
       date: new Date().toISOString().split('T')[0],
       status: 'pending',
-      image: `/uploads/${safeName}`,
+      image: imageUrl,
     }
     await addPhoto(photo)
     created.push(photo)

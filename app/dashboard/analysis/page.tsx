@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/button'
 import { DetectionViewer } from '@/components/detection-viewer'
 import { Badge } from '@/components/ui/badge'
 import { Download, Share2, Eye } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useToast } from '@/components/ui/use-toast'
+import { EstimationDialog } from '@/components/estimation-dialog'
 
 interface Detection {
   id: string
@@ -25,11 +28,15 @@ interface AnalysisReport {
   overallRisk: 'critical' | 'high' | 'medium' | 'low'
   detections: Detection[]
   image: string
+  estimates?: { id: string; material: string; quantity: number; units: string; method: string; confidence: number }[]
 }
 
 export default function AnalysisPage() {
+  const router = useRouter()
+  const { toast } = useToast() as any
   const [reports, setReports] = useState<AnalysisReport[]>([])
   const [selectedReport, setSelectedReport] = useState<AnalysisReport | null>(null)
+  const [estimateOpen, setEstimateOpen] = useState(false)
 
   useEffect(() => {
     ;(async () => {
@@ -118,15 +125,28 @@ export default function AnalysisPage() {
               </CardDescription>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="border-border/50 gap-2">
+              <Button variant="outline" size="sm" className="border-border/50 gap-2" onClick={() => selectedReport && router.push(`/dashboard/analysis/${selectedReport.id}`)}>
                 <Eye className="w-4 h-4" />
                 Preview Report
               </Button>
-              <Button variant="outline" size="sm" className="border-border/50 gap-2">
+              <Button variant="outline" size="sm" className="border-border/50 gap-2" onClick={() => selectedReport && router.push(`/dashboard/analysis/${selectedReport.id}?print=1`)}>
                 <Download className="w-4 h-4" />
                 Export
               </Button>
-              <Button variant="outline" size="sm" className="border-border/50 gap-2">
+              <Button variant="outline" size="sm" className="border-border/50 gap-2" onClick={() => setEstimateOpen(true)}>
+                Estimate Quantities
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-border/50 gap-2"
+                onClick={() => {
+                  if (!selectedReport) return
+                  const url = `${window.location.origin}/dashboard/analysis/${selectedReport.id}`
+                  navigator.clipboard?.writeText(url)
+                  toast?.({ title: 'Link copied', description: 'Report URL copied to clipboard' })
+                }}
+              >
                 <Share2 className="w-4 h-4" />
                 Share
               </Button>
@@ -200,8 +220,34 @@ export default function AnalysisPage() {
               ))}
             </div>
           </div>
+
+          {/* Material estimates */}
+          {selectedReport?.estimates && selectedReport.estimates.length > 0 && (
+            <div className="mt-6 pt-6 border-t border-border/50">
+              <h3 className="font-semibold mb-4">Material Estimates</h3>
+              <div className="space-y-3">
+                {selectedReport.estimates.map((e) => (
+                  <div key={e.id} className="p-4 border border-border/50 rounded-lg flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-sm">{e.material}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Method: {e.method}</p>
+                    </div>
+                    <Badge>{e.quantity} {e.units}</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
+      {selectedReport && (
+        <EstimationDialog
+          open={estimateOpen}
+          onOpenChange={setEstimateOpen}
+          reportId={selectedReport.id}
+          detections={selectedReport.detections}
+        />
+      )}
     </div>
   )
 }
